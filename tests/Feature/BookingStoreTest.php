@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Booking;
 use App\Models\Room;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -293,6 +294,26 @@ class BookingStoreTest extends TestCase
     public function test_requires_authentication(): void
     {
         $this->postJson('/api/bookings', $this->payload())->assertUnauthorized();
+
+        $this->assertDatabaseCount('bookings', 0);
+    }
+
+    public function test_unrelated_database_errors_are_not_reported_as_booking_conflicts(): void
+    {
+        Sanctum::actingAs($this->user);
+        $this->withoutExceptionHandling();
+
+        Booking::creating(function (Booking $booking): void {
+            $booking->user_id = 999999;
+        });
+
+        try {
+            $this->postJson('/api/bookings', $this->payload());
+
+            $this->fail('Expected a foreign key violation.');
+        } catch (QueryException $exception) {
+            $this->assertSame('23503', $exception->errorInfo[0]);
+        }
 
         $this->assertDatabaseCount('bookings', 0);
     }

@@ -7,8 +7,10 @@ use App\Models\Booking;
 use App\Models\Room;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
@@ -38,7 +40,18 @@ class BookingController extends Controller
             ]);
         }
 
-        $booking = $request->user()->bookings()->create($attributes);
+        try {
+            $booking = DB::transaction(fn (): Booking => $request->user()->bookings()->create($attributes));
+        } catch (QueryException $exception) {
+            if (($exception->errorInfo[0] ?? null) !== '23P01'
+                || ! str_contains($exception->errorInfo[2] ?? '', '"bookings_room_time_no_overlap"')) {
+                throw $exception;
+            }
+
+            throw ValidationException::withMessages([
+                'starts_at' => 'Комната занята в выбранное время.',
+            ]);
+        }
 
         Log::withContext(['booking_id' => $booking->id]);
         Log::channel('bookings')->info('Booking created');
