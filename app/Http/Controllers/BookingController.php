@@ -53,8 +53,11 @@ class BookingController extends Controller
             ]);
         }
 
-        Log::withContext(['booking_id' => $booking->id]);
-        Log::channel('bookings')->info('Booking created');
+        Log::channel('bookings')->info('Booking created', [
+            'booking_id' => $booking->id,
+            'user_id' => $booking->user_id,
+            'request' => $request->validated(),
+        ]);
 
         return $booking;
     }
